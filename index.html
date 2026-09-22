@@ -338,23 +338,37 @@
     return 4;
   }
 
+  const PARAGRAPH_MARK = '\n';
+
   function tokenize(text) {
-    const raw = text.split(/\s+/).filter(Boolean);
+    const paragraphs = text.split(/\n\s*\n+/).map((p) => p.trim()).filter(Boolean);
     const result = [];
-    for (const token of raw) {
-      // split hyphenated compounds ("plan-based" -> "plan-", "based") so each
-      // half gets its own fixation point instead of one oversized flash
-      const parts = token.split(/(?<=[^\W_])-(?=[^\W_])/);
-      for (let i = 0; i < parts.length; i++) {
-        result.push(i < parts.length - 1 ? parts[i] + '-' : parts[i]);
+    paragraphs.forEach((para, pi) => {
+      const raw = para.split(/\s+/).filter(Boolean);
+      const paraWords = [];
+      for (const token of raw) {
+        // split hyphenated compounds ("plan-based" -> "plan-", "based") so each
+        // half gets its own fixation point instead of one oversized flash
+        const parts = token.split(/(?<=[^\W_])-(?=[^\W_])/);
+        for (let i = 0; i < parts.length; i++) {
+          paraWords.push(i < parts.length - 1 ? parts[i] + '-' : parts[i]);
+        }
       }
-    }
-    // drop tokens with no letters/digits (scene-break markers like "***", "---", "—")
-    return result.filter((w) => /[\p{L}\p{N}]/u.test(w));
+      // drop tokens with no letters/digits (scene-break markers like "***", "---", "—")
+      const filtered = paraWords.filter((w) => /[\p{L}\p{N}]/u.test(w));
+      if (filtered.length && pi < paragraphs.length - 1) {
+        filtered[filtered.length - 1] += PARAGRAPH_MARK;
+      }
+      result.push(...filtered);
+    });
+    return result;
   }
 
   function joinChunk(chunk) {
-    return chunk.reduce((acc, w, i) => (i === 0 ? w : acc + (acc.endsWith('-') ? '' : ' ') + w), '');
+    return chunk.reduce((acc, w, i) => {
+      const clean = w.replace(/\n$/, '');
+      return i === 0 ? clean : acc + (acc.endsWith('-') ? '' : ' ') + clean;
+    }, '');
   }
 
   function rebuildChunks() {
@@ -376,7 +390,9 @@
     if (/[,;:-]$/.test(text)) mult = Math.max(mult, settings.commaPause);
     if (/[.!?…]$/.test(text)) mult = Math.max(mult, settings.sentencePause);
     if (text.replace(/[^a-zA-ZÀ-ÿ]/g, '').length >= 9) mult = Math.max(mult, settings.longWordPause);
-    return base * chunk.length * mult;
+    let delay = base * chunk.length * mult;
+    if (chunk.some((w) => w.endsWith(PARAGRAPH_MARK))) delay += 500;
+    return delay;
   }
 
   function renderCurrent() {
