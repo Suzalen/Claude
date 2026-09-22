@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lecteur RSVP</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2f3a;
+    --text: #e6e8ec;
+    --muted: #8b93a3;
+    --accent: #4f8cff;
+    --orp: #ff4757;
+    --fs: 56px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px;
+  }
+  .app {
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--text);
+  }
+  h1 span { color: var(--muted); font-weight: 400; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 140px;
+    resize: vertical;
+    background: #0d0f14;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    font-family: inherit;
+  }
+  textarea:focus { outline: 1px solid var(--accent); }
+
+  .stage {
+    position: relative;
+    height: 220px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: radial-gradient(ellipse at center, #14171f 0%, #0d0f14 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    user-select: none;
+  }
+  .reticle {
+    position: absolute;
+    top: 28px;
+    bottom: 28px;
+    width: 2px;
+    background: linear-gradient(var(--accent), transparent 40%, transparent 60%, var(--accent));
+    opacity: 0.35;
+  }
+  .word-display {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    width: 100%;
+    padding: 0 24px;
+    font-family: "SF Mono", "Consolas", monospace;
+    font-size: var(--fs);
+    font-weight: 500;
+    letter-spacing: 0.5px;
+  }
+  .word-display .pre  { flex: 1 1 0; text-align: right; white-space: pre; overflow: hidden; }
+  .word-display .post { flex: 1 1 0; text-align: left;  white-space: pre; overflow: hidden; }
+  .word-display .orp  { color: var(--orp); font-weight: 700; }
+  .placeholder { color: var(--muted); font-size: 16px; font-weight: 400; }
+
+  .progress-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 8px 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .progress-bar {
+    flex: 1;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--accent);
+  }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 4px 0 0;
+  }
+  button {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: 0.4; cursor: default; }
+  button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+    min-width: 100px;
+  }
+  button.icon { padding: 10px 14px; }
+
+  .settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 18px;
+  }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+  }
+  .field label .val { color: var(--text); font-weight: 600; }
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+  .toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    color: var(--text);
+    padding: 4px 0;
+  }
+  .toggle input { accent-color: var(--accent); width: 18px; height: 18px; }
+
+  .hint {
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+  }
+  .hint kbd {
+    background: var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: inherit;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>Lecteur RSVP <span>— Rapid Serial Visual Presentation</span></h1>
+
+  <div class="panel">
+    <textarea id="input" placeholder="Colle ton texte ici, puis clique sur Charger."></textarea>
+    <div class="controls" style="margin-top: 12px;">
+      <button class="primary" id="loadBtn">Charger le texte</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="stage" id="stage">
+      <div class="reticle" id="reticle" style="display:none;"></div>
+      <div class="word-display" id="wordDisplay">
+        <span class="placeholder">En attente de texte…</span>
+      </div>
+    </div>
+
+    <div class="progress-row">
+      <span id="wordCount">0 / 0</span>
+      <div class="progress-bar" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
+      <span id="timeLeft">0:00</span>
+    </div>
+
+    <div class="controls">
+      <button class="icon" id="restartBtn" title="Recommencer">⏮</button>
+      <button class="icon" id="backBtn" title="Reculer de 10 mots">−10</button>
+      <button class="primary" id="playBtn">Lecture</button>
+      <button class="icon" id="fwdBtn" title="Avancer de 10 mots">+10</button>
+    </div>
+
+    <div class="hint"><kbd>Espace</kbd> lecture/pause · <kbd>←</kbd> <kbd>→</kbd> naviguer mot par mot · <kbd>Échap</kbd> réinitialiser</div>
+  </div>
+
+  <div class="panel settings-grid">
+    <div class="field">
+      <label>Vitesse (mots/minute) <span class="val" id="wpmVal">300</span></label>
+      <input type="range" id="wpm" min="100" max="900" step="10" value="300">
+    </div>
+    <div class="field">
+      <label>Mots par affichage <span class="val" id="chunkVal">1</span></label>
+      <input type="range" id="chunk" min="1" max="3" step="1" value="1">
+    </div>
+    <div class="field">
+      <label>Taille du texte <span class="val" id="fontVal">56px</span></label>
+      <input type="range" id="fontSize" min="28" max="96" step="2" value="56">
+    </div>
+    <div class="field">
+      <label>Pause virgule/point-virgule <span class="val" id="commaVal">×1.5</span></label>
+      <input type="range" id="commaPause" min="1" max="4" step="0.1" value="1.5">
+    </div>
+    <div class="field">
+      <label>Pause fin de phrase <span class="val" id="sentenceVal">×2.5</span></label>
+      <input type="range" id="sentencePause" min="1" max="5" step="0.1" value="2.5">
+    </div>
+    <div class="field">
+      <label>Pause mots longs <span class="val" id="longWordVal">×1.3</span></label>
+      <input type="range" id="longWordPause" min="1" max="3" step="0.1" value="1.3">
+    </div>
+    <div class="toggle">
+      <label for="orpToggle">Repère de fixation (ORP, lettre pivot en rouge)</label>
+      <input type="checkbox" id="orpToggle" checked>
+    </div>
+    <div class="toggle">
+      <label for="reticleToggle">Ligne de guidage verticale</label>
+      <input type="checkbox" id="reticleToggle" checked>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const el = (id) => document.getElementById(id);
+
+  const input = el('input');
+  const loadBtn = el('loadBtn');
+  const wordDisplay = el('wordDisplay');
+  const stage = el('stage');
+  const reticle = el('reticle');
+  const playBtn = el('playBtn');
+  const restartBtn = el('restartBtn');
+  const backBtn = el('backBtn');
+  const fwdBtn = el('fwdBtn');
+  const progressBar = el('progressBar');
+  const progressFill = el('progressFill');
+  const wordCount = el('wordCount');
+  const timeLeft = el('timeLeft');
+
+  const wpmSlider = el('wpm');
+  const chunkSlider = el('chunk');
+  const fontSlider = el('fontSize');
+  const commaSlider = el('commaPause');
+  const sentenceSlider = el('sentencePause');
+  const longWordSlider = el('longWordPause');
+  const orpToggle = el('orpToggle');
+  const reticleToggle = el('reticleToggle');
+
+  let words = [];
+  let chunks = [];
+  let index = 0;
+  let playing = false;
+  let timerId = null;
+
+  const settings = {
+    wpm: 300,
+    chunk: 1,
+    fontSize: 56,
+    commaPause: 1.5,
+    sentencePause: 2.5,
+    longWordPause: 1.3,
+    orp: true,
+    reticle: true,
+  };
+
+  function bindSlider(slider, valEl, key, formatter) {
+    slider.addEventListener('input', () => {
+      const v = parseFloat(slider.value);
+      settings[key] = v;
+      valEl.textContent = formatter ? formatter(v) : v;
+      if (key === 'chunk') rebuildChunks();
+      if (key === 'fontSize') document.documentElement.style.setProperty('--fs', v + 'px');
+    });
+  }
+  bindSlider(wpmSlider, el('wpmVal'), 'wpm');
+  bindSlider(chunkSlider, el('chunkVal'), 'chunk');
+  bindSlider(fontSlider, el('fontVal'), 'fontSize', (v) => v + 'px');
+  bindSlider(commaSlider, el('commaVal'), 'commaPause', (v) => '×' + v.toFixed(1));
+  bindSlider(sentenceSlider, el('sentenceVal'), 'sentencePause', (v) => '×' + v.toFixed(1));
+  bindSlider(longWordSlider, el('longWordVal'), 'longWordPause', (v) => '×' + v.toFixed(1));
+
+  orpToggle.addEventListener('change', () => {
+    settings.orp = orpToggle.checked;
+    renderCurrent();
+  });
+  reticleToggle.addEventListener('change', () => {
+    settings.reticle = reticleToggle.checked;
+    reticle.style.display = settings.reticle && chunks.length ? 'block' : 'none';
+  });
+
+  function orpIndex(word) {
+    const len = word.length;
+    if (len <= 1) return 0;
+    if (len <= 5) return 1;
+    if (len <= 9) return 2;
+    if (len <= 13) return 3;
+    return 4;
+  }
+
+  function rebuildChunks() {
+    if (!words.length) return;
+    const size = settings.chunk;
+    chunks = [];
+    for (let i = 0; i < words.length; i += size) {
+      chunks.push(words.slice(i, i + size));
+    }
+    index = Math.min(index, Math.max(chunks.length - 1, 0));
+    updateProgress();
+    renderCurrent();
+  }
+
+  function delayForChunk(chunk) {
+    const base = 60000 / settings.wpm;
+    const text = chunk.join(' ');
+    let mult = 1;
+    if (/[,;:]$/.test(text)) mult = Math.max(mult, settings.commaPause);
+    if (/[.!?…]$/.test(text)) mult = Math.max(mult, settings.sentencePause);
+    if (text.replace(/[^a-zA-ZÀ-ÿ]/g, '').length >= 9) mult = Math.max(mult, settings.longWordPause);
+    return base * chunk.length * mult;
+  }
+
+  function renderCurrent() {
+    if (!chunks.length) {
+      wordDisplay.innerHTML = '<span class="placeholder">En attente de texte…</span>';
+      return;
+    }
+    const chunk = chunks[index];
+    const text = chunk.join(' ');
+
+    if (!settings.orp || chunk.length > 1) {
+      wordDisplay.innerHTML = `<span class="post" style="text-align:center; flex: 2;">${escapeHtml(text)}</span>`;
+      return;
+    }
+
+    const oi = orpIndex(text);
+    const pre = text.slice(0, oi);
+    const pivot = text.slice(oi, oi + 1);
+    const post = text.slice(oi + 1);
+    wordDisplay.innerHTML =
+      `<span class="pre">${escapeHtml(pre)}</span>` +
+      `<span class="orp">${escapeHtml(pivot)}</span>` +
+      `<span class="post">${escapeHtml(post)}</span>`;
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+
+  function updateProgress() {
+    const total = chunks.length;
+    wordCount.textContent = `${Math.min(index + 1, total)} / ${total}`;
+    progressFill.style.width = total ? `${(index / Math.max(total - 1, 1)) * 100}%` : '0%';
+
+    let remainingMs = 0;
+    for (let i = index; i < chunks.length; i++) remainingMs += delayForChunk(chunks[i]);
+    const s = Math.round(remainingMs / 1000);
+    timeLeft.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  }
+
+  function step() {
+    if (!playing) return;
+    renderCurrent();
+    updateProgress();
+    if (index >= chunks.length - 1) {
+      pause();
+      return;
+    }
+    const delay = delayForChunk(chunks[index]);
+    timerId = setTimeout(() => {
+      index++;
+      step();
+    }, delay);
+  }
+
+  function play() {
+    if (!chunks.length || playing) return;
+    if (index >= chunks.length - 1) index = 0;
+    playing = true;
+    playBtn.textContent = 'Pause';
+    reticle.style.display = settings.reticle ? 'block' : 'none';
+    step();
+  }
+
+  function pause() {
+    playing = false;
+    playBtn.textContent = 'Lecture';
+    clearTimeout(timerId);
+  }
+
+  function toggle() {
+    playing ? pause() : play();
+  }
+
+  function restart() {
+    pause();
+    index = 0;
+    updateProgress();
+    renderCurrent();
+  }
+
+  function seek(deltaChunks) {
+    pause();
+    index = Math.max(0, Math.min(chunks.length - 1, index + deltaChunks));
+    updateProgress();
+    renderCurrent();
+  }
+
+  loadBtn.addEventListener('click', () => {
+    const text = input.value.trim();
+    words = text.split(/\s+/).filter(Boolean);
+    index = 0;
+    rebuildChunks();
+    pause();
+    if (words.length) {
+      reticle.style.display = settings.reticle ? 'block' : 'none';
+    }
+  });
+
+  playBtn.addEventListener('click', toggle);
+  restartBtn.addEventListener('click', restart);
+  backBtn.addEventListener('click', () => seek(-10));
+  fwdBtn.addEventListener('click', () => seek(10));
+
+  progressBar.addEventListener('click', (e) => {
+    if (!chunks.length) return;
+    const rect = progressBar.getBoundingClientRect();
+    const ratio = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1);
+    pause();
+    index = Math.round(ratio * (chunks.length - 1));
+    updateProgress();
+    renderCurrent();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (document.activeElement === input) return;
+    if (e.code === 'Space') { e.preventDefault(); toggle(); }
+    else if (e.code === 'ArrowLeft') { e.preventDefault(); seek(-1); }
+    else if (e.code === 'ArrowRight') { e.preventDefault(); seek(1); }
+    else if (e.code === 'Escape') { e.preventDefault(); restart(); }
+  });
+
+  document.documentElement.style.setProperty('--fs', settings.fontSize + 'px');
+})();
+</script>
+</body>
+</html>
