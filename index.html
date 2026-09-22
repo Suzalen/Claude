@@ -349,7 +349,8 @@
         result.push(i < parts.length - 1 ? parts[i] + '-' : parts[i]);
       }
     }
-    return result;
+    // drop tokens with no letters/digits (scene-break markers like "***", "---", "—")
+    return result.filter((w) => /[\p{L}\p{N}]/u.test(w));
   }
 
   function joinChunk(chunk) {
