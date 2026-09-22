@@ -338,6 +338,24 @@
     return 4;
   }
 
+  function tokenize(text) {
+    const raw = text.split(/\s+/).filter(Boolean);
+    const result = [];
+    for (const token of raw) {
+      // split hyphenated compounds ("plan-based" -> "plan-", "based") so each
+      // half gets its own fixation point instead of one oversized flash
+      const parts = token.split(/(?<=[^\W_])-(?=[^\W_])/);
+      for (let i = 0; i < parts.length; i++) {
+        result.push(i < parts.length - 1 ? parts[i] + '-' : parts[i]);
+      }
+    }
+    return result;
+  }
+
+  function joinChunk(chunk) {
+    return chunk.reduce((acc, w, i) => (i === 0 ? w : acc + (acc.endsWith('-') ? '' : ' ') + w), '');
+  }
+
   function rebuildChunks() {
     if (!words.length) return;
     const size = settings.chunk;
@@ -352,9 +370,9 @@
 
   function delayForChunk(chunk) {
     const base = 60000 / settings.wpm;
-    const text = chunk.join(' ');
+    const text = joinChunk(chunk);
     let mult = 1;
-    if (/[,;:]$/.test(text)) mult = Math.max(mult, settings.commaPause);
+    if (/[,;:-]$/.test(text)) mult = Math.max(mult, settings.commaPause);
     if (/[.!?…]$/.test(text)) mult = Math.max(mult, settings.sentencePause);
     if (text.replace(/[^a-zA-ZÀ-ÿ]/g, '').length >= 9) mult = Math.max(mult, settings.longWordPause);
     return base * chunk.length * mult;
@@ -366,7 +384,7 @@
       return;
     }
     const chunk = chunks[index];
-    const text = chunk.join(' ');
+    const text = joinChunk(chunk);
 
     if (!settings.orp || chunk.length > 1) {
       wordDisplay.innerHTML = `<span class="post" style="text-align:center; flex: 2;">${escapeHtml(text)}</span>`;
@@ -448,7 +466,7 @@
 
   loadBtn.addEventListener('click', () => {
     const text = input.value.trim();
-    words = text.split(/\s+/).filter(Boolean);
+    words = tokenize(text);
     index = 0;
     rebuildChunks();
     pause();
